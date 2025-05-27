@@ -1,0 +1,198 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Все товары</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', sans-serif;
+            background-color: #f4f4f4;
+            margin: 0;
+            padding: 2rem;
+        }
+
+        h1 {
+            text-align: center;
+            color: #333;
+        }
+
+        .items-list {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
+            gap: 1.5rem;
+            margin-top: 2rem;
+        }
+
+        .item-card {
+            display: flex;
+            flex-direction: column;
+            background-color: white;
+            border-radius: 8px;
+            box-shadow: 0 2px 6px rgba(0,0,0,0.1);
+            padding: 1rem;
+            transition: transform 0.2s;
+            gap: 1rem;
+        }
+
+        .item-card:hover {
+            transform: translateY(-5px);
+        }
+
+        .item-name {
+            font-size: 1.2rem;
+            font-weight: bold;
+            margin-bottom: 0.5rem;
+        }
+
+        .item-description {
+            font-size: 0.95rem;
+            color: #555;
+            margin-bottom: 1rem;
+        }
+
+        .item-price {
+            font-size: 1rem;
+            color: #2c7a2d;
+            font-weight: bold;
+        }
+
+        .buy-button,
+        .order-button {
+            margin-top: auto;
+            padding: 0.5rem 1rem;
+            background-color: #6772e5;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 0.9rem;
+        }
+
+        .buy-button:hover,
+        .order-button:hover {
+            background-color: #5469d4;
+        }
+
+        .order-button.remove {
+            background-color: #e54949;
+        }
+
+        .order-button.remove:hover {
+            background-color: #cc3f3f;
+        }
+
+        .header {
+            display: flex;
+            flex-direction: column;
+            gap: 1rem;
+        }
+    </style>
+</head>
+<body>
+
+<div class="header">
+    <h1>Все товары</h1>
+    <button id="checkout-button" style="margin-top: 2rem; padding: 0.75rem 1.5rem; font-size: 1rem;">
+            Оформить заказ
+    </button>
+</div>
+
+
+<div class="items-list">
+    {% for item in items %}
+        <div class="item-card" data-item-id="{{ item.id }}">
+            <div class="item-name">{{ item.name }}</div>
+            <div class="item-description">{{ item.description|truncatechars:100 }}</div>
+            <div class="item-price">${{ item.price }}</div>
+
+            <a href="/item/{{ item.id }}">
+                <span class="buy-button">Подробнее</span>
+            </a>
+
+            <button class="order-button" data-item-id="{{ item.id }}">Добавить в заказ</button>
+        </div>
+    {% empty %}
+        <p>Нет доступных товаров.</p>
+    {% endfor %}
+</div>
+
+<script src="http://js.stripe.com/v3/ "></script>
+<script>
+    document.getElementById('checkout-button').addEventListener('click', function () {
+        const selectedItems = JSON.parse(localStorage.getItem('selectedItems') || '[]');
+
+        if (selectedItems.length === 0) {
+            alert("Выберите хотя бы один товар для оформления заказа.");
+            return;
+        }
+
+        fetch('/order/', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': '{{ csrf_token }}'
+            },
+            body: JSON.stringify({ order: selectedItems })
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.session_id) {
+                const stripe = Stripe('pk_test_51RTGbVFa4uyPpNg1OVFzfC4IyofDLG1La2ROQz0c4RdOz6UsMD6troPY49lhV5sSktsYA2iT7anPc9RweloY3yaO004P2xyUAi');
+                return stripe.redirectToCheckout({ sessionId: data.session_id });
+            } else if (data.error) {
+                alert(data.error);
+            }
+        })
+        .then(result => {
+            if (result && result.error) {
+                alert(result.error.message);
+            }
+        });
+    });
+</script>
+
+<script>
+    document.addEventListener('DOMContentLoaded', function () {
+        const orderButtons = document.querySelectorAll('.order-button');
+
+        // Проверяем localStorage и обновляем текст кнопок
+        function isInOrder(itemId) {
+            const selectedItems = JSON.parse(localStorage.getItem('selectedItems') || '[]');
+            return selectedItems.includes(parseInt(itemId));
+        }
+
+        function updateButton(button, isAdded) {
+            button.textContent = isAdded ? 'Убрать из заказа' : 'Добавить в заказ';
+            button.classList.toggle('remove', isAdded);
+        }
+
+        // Инициализация кнопок
+        orderButtons.forEach(button => {
+            const itemId = parseInt(button.dataset.itemId);
+            updateButton(button, isInOrder(itemId));
+        });
+
+        // Обработчик кликов по кнопкам
+        orderButtons.forEach(button => {
+            button.addEventListener('click', function () {
+                const itemId = parseInt(this.dataset.itemId);
+                let selectedItems = JSON.parse(localStorage.getItem('selectedItems') || '[]');
+
+                if (!selectedItems.includes(itemId)) {
+                    selectedItems.push(itemId);
+                    updateButton(this, true);
+                    alert("Товар добавлен в заказ");
+                } else {
+                    selectedItems = selectedItems.filter(id => id !== itemId);
+                    updateButton(this, false);
+                    alert("Товар убран из заказа");
+                }
+
+                localStorage.setItem('selectedItems', JSON.stringify(selectedItems));
+            });
+        });
+    });
+</script>
+
+</body>
+</html>

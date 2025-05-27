@@ -40,6 +40,10 @@
             transition: background-color 0.3s ease;
         }
 
+        .button.delete {
+            background-color: #e54949;
+        }
+
         button:hover {
             background-color: #5469d4;
         }
@@ -50,10 +54,49 @@
     <p>{{ item.description }}</p>
     <p>Цена: ${{ item.price|floatformat:2 }}</p>
 
-    <button id="buy-button">Купить</button>
+    <button id="buy-button">Купить сейчас</button>
+    <button id="add-to-order-button">Добавить в заказ</button>
+    <a href="/">
+        <button>На главную</button>
+    </a>
 
     <script src="http://js.stripe.com/v3/ "></script>
     <script>
+        const itemId = {{ item.id }};
+        const addToOrderButton = document.getElementById('add-to-order-button');
+
+        // Проверяем, есть ли товар в localStorage
+        function isInOrder(itemId) {
+            const selectedItems = JSON.parse(localStorage.getItem('selectedItems') || '[]');
+            return selectedItems.includes(itemId);
+        }
+
+        // Обновляем текст кнопки при загрузке
+        if (isInOrder(itemId)) {
+            addToOrderButton.textContent = 'Убрать из заказа';
+        }
+
+        // Логика кнопки
+        addToOrderButton.addEventListener('click', function () {
+            let selectedItems = JSON.parse(localStorage.getItem('selectedItems') || '[]');
+
+            if (!selectedItems.includes(itemId)) {
+                // Добавляем товар
+                selectedItems.push(itemId);
+                localStorage.setItem('selectedItems', JSON.stringify(selectedItems));
+                addToOrderButton.textContent = 'Убрать из заказа';
+                addToOrderButton.classList.add('delete');
+                alert("Товар добавлен в заказ");
+            } else {
+                // Убираем товар
+                selectedItems = selectedItems.filter(id => id !== itemId);
+                localStorage.setItem('selectedItems', JSON.stringify(selectedItems));
+                addToOrderButton.textContent = 'Добавить в заказ';
+                alert("Товар убран из заказа");
+            }
+        });
+
+        // Купить сейчас
         document.getElementById('buy-button').addEventListener('click', function () {
             fetch(`/buy/{{ item.id }}`)
                 .then(response => response.json())

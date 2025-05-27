@@ -1,0 +1,72 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Товар {{ item.name }}</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: #f9f9f9;
+            color: #333;
+            margin: 0;
+            padding: 2rem;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            flex-direction: column;
+        }
+
+        h1 {
+            font-size: 2rem;
+            margin-bottom: 0.5rem;
+        }
+
+        p {
+            font-size: 1.1rem;
+            margin: 0.5rem 0;
+            text-align: center;
+        }
+
+        button {
+            margin-top: 1.5rem;
+            padding: 0.75rem 1.5rem;
+            font-size: 1rem;
+            background-color: #6772e5;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            transition: background-color 0.3s ease;
+        }
+
+        button:hover {
+            background-color: #5469d4;
+        }
+    </style>
+</head>
+<body>
+    <h1>{{ item.name }}</h1>
+    <p>{{ item.description }}</p>
+    <p>Цена: ${{ item.price|floatformat:2 }}</p>
+
+    <button id="buy-button">Купить</button>
+
+    <script src="http://js.stripe.com/v3/ "></script>
+    <script>
+        document.getElementById('buy-button').addEventListener('click', function () {
+            fetch(`/buy/{{ item.id }}`)
+                .then(response => response.json())
+                .then(data => {
+                    const stripe = Stripe('pk_test_51RTGbVFa4uyPpNg1OVFzfC4IyofDLG1La2ROQz0c4RdOz6UsMD6troPY49lhV5sSktsYA2iT7anPc9RweloY3yaO004P2xyUAi');
+                    return stripe.redirectToCheckout({ sessionId: data.session_id });
+                })
+                .then(result => {
+                    if (result.error) {
+                        alert(result.error.message);
+                    }
+                });
+        });
+    </script>
+</body>
+</html>

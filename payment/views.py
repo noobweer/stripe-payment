@@ -17,7 +17,8 @@ class AllPage(View):
     def get(self, request):
         try:
             items = Item.objects.all()
-            return render(request, 'allPage.html', {'items': items})
+            discounts = Discount.objects.filter(active=True)
+            return render(request, 'allPage.html', {'items': items, 'discounts': discounts})
         except Exception as e:
             return HttpResponse(e)
 
@@ -26,15 +27,22 @@ class ItemPage(View):
     def get(self, request, id):
         try:
             item = Item.objects.get(id=id)
-            return render(request, 'itemPage.html', {'item': item})
+            discounts = Discount.objects.filter(active=True)
+            return render(request, 'itemPage.html', {'item': item, 'discounts': discounts})
         except Exception as e:
             return HttpResponse(e)
 
 
 class ItemBuy(View):
-    def get(self, id):
+    def get(self, request, id):
         try:
             item = Item.objects.get(id=id)
+            discount_id = request.GET.get('discount_id')
+
+            if discount_id and Discount.objects.filter(stripe_id=discount_id, active=True).exists():
+                discount = {'coupon': Discount.objects.get(stripe_id=discount_id).stripe_id}
+            else:
+                discount = None
 
             session = stripe.checkout.Session.create(
                 line_items=[{
@@ -51,6 +59,7 @@ class ItemBuy(View):
                 mode='payment',
                 success_url='https://example.com/success',
                 cancel_url='https://example.com/cancel',
+                discounts=discount,
             )
             return JsonResponse({'session_id': session.id})
         except Exception as e:
@@ -62,12 +71,22 @@ class OrderBuy(View):
         try:
             data = json.loads(request.body)
             item_ids = data.get('order', [])
+            discount_id = data.get('discount_id')
 
-            if len(item_ids) < 1:
-                return JsonResponse({'error': 'order must contain at least 1 item'})
+            print(data)
+            if not item_ids:
+                return JsonResponse({'error': 'Order must contain at least one item'}, status=400)
 
             line_items = []
-            order_obj = Order.objects.create()
+            discounts = []
+            if discount_id and Discount.objects.filter(stripe_id=discount_id, active=True).exists():
+                discount_obj = Discount.objects.get(stripe_id=discount_id)
+                discounts.append({"coupon": discount_obj.stripe_id})
+
+                order_obj = Order.objects.create(discount=discount_obj)
+            else:
+                order_obj = Order.objects.create()
+
             for item_id in item_ids:
                 try:
                     item_obj = Item.objects.get(id=item_id)
@@ -80,7 +99,7 @@ class OrderBuy(View):
                                 'name': item_obj.name,
                                 'description': item_obj.description,
                             },
-                            'unit_amount': int(item_obj.price * 100),  # цена в центах
+                            'unit_amount': int(item_obj.price * 100),
                         },
                         'quantity': 1,
                     })
@@ -89,12 +108,17 @@ class OrderBuy(View):
                     continue
 
             session = stripe.checkout.Session.create(
+                payment_method_types=['card'],
                 line_items=line_items,
                 mode='payment',
                 success_url='https://example.com/success',
                 cancel_url='https://example.com/cancel',
+                discounts=discounts,
             )
 
             return JsonResponse({'session_id': session.id})
+
+        except json.JSONDecodeError:
+            return JsonResponse({'error': 'Invalid JSON'}, status=400)
         except Exception as e:
-            return JsonResponse({'error': str(e)})
+            return JsonResponse({'error': str(e)}, status=500)

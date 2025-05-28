@@ -1,3 +1,5 @@
+<!-- templates/item_detail.html -->
+
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -28,31 +30,49 @@
             text-align: center;
         }
 
-        button {
+        button, select {
             margin-top: 1.5rem;
             padding: 0.75rem 1.5rem;
             font-size: 1rem;
+            border-radius: 4px;
+            cursor: pointer;
+        }
+
+        button {
             background-color: #6772e5;
             color: white;
             border: none;
-            border-radius: 4px;
-            cursor: pointer;
             transition: background-color 0.3s ease;
         }
 
         .button.delete {
             background-color: #e54949;
+            color: white;
         }
 
         button:hover {
             background-color: #5469d4;
         }
+
+        select {
+            padding: 0.5rem;
+            font-size: 1rem;
+        }
     </style>
 </head>
 <body>
+
     <h1>{{ item.name }}</h1>
     <p>{{ item.description }}</p>
     <p>Цена: ${{ item.price|floatformat:2 }}</p>
+
+    <label for="discount-select">Выберите скидку:</label>
+    <select id="discount-select">
+        <option value="">Без скидки</option>
+        {% for discount in discounts %}
+            <option value="{{ discount.id }}">{{ discount.name }} ({{ discount.percent_off }}%)</option>
+        {% endfor %}
+    </select>
 
     <button id="buy-button">Купить сейчас</button>
     <button id="add-to-order-button">Добавить в заказ</button>
@@ -60,10 +80,12 @@
         <button>На главную</button>
     </a>
 
-    <script src="http://js.stripe.com/v3/ "></script>
+    <script src="https://js.stripe.com/v3/ "></script>
     <script>
         const itemId = {{ item.id }};
         const addToOrderButton = document.getElementById('add-to-order-button');
+        const buyButton = document.getElementById('buy-button');
+        const discountSelect = document.getElementById('discount-select');
 
         // Проверяем, есть ли товар в localStorage
         function isInOrder(itemId) {
@@ -74,41 +96,57 @@
         // Обновляем текст кнопки при загрузке
         if (isInOrder(itemId)) {
             addToOrderButton.textContent = 'Убрать из заказа';
+            addToOrderButton.classList.add('delete');
         }
 
-        // Логика кнопки
+        // Логика кнопки "Добавить / Убрать"
         addToOrderButton.addEventListener('click', function () {
             let selectedItems = JSON.parse(localStorage.getItem('selectedItems') || '[]');
 
             if (!selectedItems.includes(itemId)) {
-                // Добавляем товар
                 selectedItems.push(itemId);
                 localStorage.setItem('selectedItems', JSON.stringify(selectedItems));
                 addToOrderButton.textContent = 'Убрать из заказа';
                 addToOrderButton.classList.add('delete');
                 alert("Товар добавлен в заказ");
             } else {
-                // Убираем товар
                 selectedItems = selectedItems.filter(id => id !== itemId);
                 localStorage.setItem('selectedItems', JSON.stringify(selectedItems));
                 addToOrderButton.textContent = 'Добавить в заказ';
+                addToOrderButton.classList.remove('delete');
                 alert("Товар убран из заказа");
             }
         });
 
-        // Купить сейчас
-        document.getElementById('buy-button').addEventListener('click', function () {
-            fetch(`/buy/{{ item.id }}`)
-                .then(response => response.json())
-                .then(data => {
-                    const stripe = Stripe('pk_test_51RTGbVFa4uyPpNg1OVFzfC4IyofDLG1La2ROQz0c4RdOz6UsMD6troPY49lhV5sSktsYA2iT7anPc9RweloY3yaO004P2xyUAi');
+        // Логика кнопки "Купить сейчас"
+        buyButton.addEventListener('click', function () {
+            const selectedDiscountId = discountSelect ? discountSelect.value : null;
+
+            let url = `/buy/${itemId}/`;
+            if (selectedDiscountId) {
+                url += `?discount_id=${selectedDiscountId}`;
+            }
+
+            fetch(url, {
+                method: 'GET',
+                headers: {
+                    'X-CSRFToken': '{{ csrf_token }}'
+                }
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.session_id) {
+                    const stripe = Stripe('pk_test_...');
                     return stripe.redirectToCheckout({ sessionId: data.session_id });
-                })
-                .then(result => {
-                    if (result.error) {
-                        alert(result.error.message);
-                    }
-                });
+                } else if (data.error) {
+                    alert(data.error);
+                }
+            })
+            .then(result => {
+                if (result && result.error) {
+                    alert(result.error.message);
+                }
+            });
         });
     </script>
 </body>

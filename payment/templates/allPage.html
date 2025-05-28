@@ -16,11 +16,18 @@
             color: #333;
         }
 
+        .header {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 1rem;
+            margin-bottom: 2rem;
+        }
+
         .items-list {
             display: grid;
             grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
             gap: 1.5rem;
-            margin-top: 2rem;
         }
 
         .item-card {
@@ -58,7 +65,6 @@
 
         .buy-button,
         .order-button {
-            margin-top: auto;
             padding: 0.5rem 1rem;
             background-color: #6772e5;
             color: white;
@@ -81,10 +87,23 @@
             background-color: #cc3f3f;
         }
 
-        .header {
+        .checkout-section {
             display: flex;
             flex-direction: column;
-            gap: 1rem;
+            align-items: center;
+            margin-top: 2rem;
+        }
+
+        select {
+            padding: 0.5rem;
+            font-size: 1rem;
+            width: auto;
+        }
+
+        button#checkout-button {
+            margin-top: 1rem;
+            padding: 0.75rem 1.5rem;
+            font-size: 1rem;
         }
     </style>
 </head>
@@ -92,12 +111,23 @@
 
 <div class="header">
     <h1>Все товары</h1>
-    <button id="checkout-button" style="margin-top: 2rem; padding: 0.75rem 1.5rem; font-size: 1rem;">
-            Оформить заказ
-    </button>
 </div>
 
+<!-- Селект со скидками -->
+<div class="checkout-section">
+    <label for="discount-select">Выберите скидку:</label>
+    <select id="discount-select">
+        <option value="">Без скидки</option>
+        {% for discount in discounts %}
+            <option value="{{ discount.stripe_id }}">{{ discount.name }} ({{ discount.percent_off }}%)</option>
+        {% endfor %}
+    </select>
 
+    <!-- Кнопка Оформить заказ -->
+    <button id="checkout-button">Оформить заказ</button>
+</div>
+
+<!-- Список товаров -->
 <div class="items-list">
     {% for item in items %}
         <div class="item-card" data-item-id="{{ item.id }}">
@@ -116,46 +146,11 @@
     {% endfor %}
 </div>
 
-<script src="http://js.stripe.com/v3/ "></script>
-<script>
-    document.getElementById('checkout-button').addEventListener('click', function () {
-        const selectedItems = JSON.parse(localStorage.getItem('selectedItems') || '[]');
-
-        if (selectedItems.length === 0) {
-            alert("Выберите хотя бы один товар для оформления заказа.");
-            return;
-        }
-
-        fetch('/order/', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                'X-CSRFToken': '{{ csrf_token }}'
-            },
-            body: JSON.stringify({ order: selectedItems })
-        })
-        .then(response => response.json())
-        .then(data => {
-            if (data.session_id) {
-                const stripe = Stripe('pk_test_51RTGbVFa4uyPpNg1OVFzfC4IyofDLG1La2ROQz0c4RdOz6UsMD6troPY49lhV5sSktsYA2iT7anPc9RweloY3yaO004P2xyUAi');
-                return stripe.redirectToCheckout({ sessionId: data.session_id });
-            } else if (data.error) {
-                alert(data.error);
-            }
-        })
-        .then(result => {
-            if (result && result.error) {
-                alert(result.error.message);
-            }
-        });
-    });
-</script>
-
+<script src="https://js.stripe.com/v3/ "></script>
 <script>
     document.addEventListener('DOMContentLoaded', function () {
         const orderButtons = document.querySelectorAll('.order-button');
 
-        // Проверяем localStorage и обновляем текст кнопок
         function isInOrder(itemId) {
             const selectedItems = JSON.parse(localStorage.getItem('selectedItems') || '[]');
             return selectedItems.includes(parseInt(itemId));
@@ -166,33 +161,73 @@
             button.classList.toggle('remove', isAdded);
         }
 
-        // Инициализация кнопок
-        orderButtons.forEach(button => {
-            const itemId = parseInt(button.dataset.itemId);
-            updateButton(button, isInOrder(itemId));
-        });
+        function updateAllButtons() {
+            document.querySelectorAll('.order-button').forEach(button => {
+                const itemId = parseInt(button.dataset.itemId);
+                updateButton(button, isInOrder(itemId));
+            });
+        }
 
-        // Обработчик кликов по кнопкам
+        // Инициализация кнопок при загрузке страницы
+        updateAllButtons();
+
+        // Обработка кликов по кнопкам "Добавить в заказ"
         orderButtons.forEach(button => {
             button.addEventListener('click', function () {
-                const itemId = parseInt(this.dataset.itemId);
                 let selectedItems = JSON.parse(localStorage.getItem('selectedItems') || '[]');
+                const itemId = parseInt(this.dataset.itemId);
 
                 if (!selectedItems.includes(itemId)) {
                     selectedItems.push(itemId);
-                    updateButton(this, true);
                     alert("Товар добавлен в заказ");
                 } else {
                     selectedItems = selectedItems.filter(id => id !== itemId);
-                    updateButton(this, false);
                     alert("Товар убран из заказа");
                 }
 
                 localStorage.setItem('selectedItems', JSON.stringify(selectedItems));
+                updateAllButtons();  // ← обновляем все кнопки
+            });
+        });
+
+        // Обработчик кнопки "Оформить заказ"
+        document.getElementById('checkout-button').addEventListener('click', function () {
+            const selectedItems = JSON.parse(localStorage.getItem('selectedItems') || '[]');
+            const discountSelect = document.getElementById('discount-select');
+            const discountId = discountSelect ? discountSelect.value : null;
+
+            if (selectedItems.length === 0) {
+                alert("Выберите хотя бы один товар для оформления заказа.");
+                return;
+            }
+
+            fetch('/order/', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRFToken': '{{ csrf_token }}'
+                },
+                body: JSON.stringify({
+                    order: selectedItems,
+                    discount_id: discountId
+                })
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.session_id) {
+                    const stripe = Stripe('pk_test_51RTGbVFa4uyPpNg1OVFzfC4IyofDLG1La2ROQz0c4RdOz6UsMD6troPY49lhV5sSktsYA2iT7anPc9RweloY3yaO004P2xyUAi');
+                    return stripe.redirectToCheckout({ sessionId: data.session_id });
+                } else if (data.error) {
+                    alert(data.error);
+                }
+            })
+            .then(result => {
+                if (result && result.error) {
+                    alert(result.error.message);
+                }
             });
         });
     });
 </script>
-
 </body>
 </html>

@@ -18,7 +18,8 @@ class AllPage(View):
         try:
             items = Item.objects.all()
             discounts = Discount.objects.filter(active=True)
-            return render(request, 'allPage.html', {'items': items, 'discounts': discounts})
+            taxes = Tax.objects.filter(active=True)
+            return render(request, 'allPage.html', {'items': items, 'discounts': discounts, 'taxes': taxes})
         except Exception as e:
             return HttpResponse(e)
 
@@ -34,15 +35,9 @@ class ItemPage(View):
 
 
 class ItemBuy(View):
-    def get(self, request, id):
+    def get(self, id):
         try:
             item = Item.objects.get(id=id)
-            discount_id = request.GET.get('discount_id')
-
-            if discount_id and Discount.objects.filter(stripe_id=discount_id, active=True).exists():
-                discount = {'coupon': Discount.objects.get(stripe_id=discount_id).stripe_id}
-            else:
-                discount = None
 
             session = stripe.checkout.Session.create(
                 line_items=[{
@@ -59,7 +54,6 @@ class ItemBuy(View):
                 mode='payment',
                 success_url='https://example.com/success',
                 cancel_url='https://example.com/cancel',
-                discounts=discount,
             )
             return JsonResponse({'session_id': session.id})
         except Exception as e:
@@ -72,8 +66,10 @@ class OrderBuy(View):
             data = json.loads(request.body)
             item_ids = data.get('order', [])
             discount_id = data.get('discount_id')
+            tax_id = data.get('tax_id')
 
             print(data)
+
             if not item_ids:
                 return JsonResponse({'error': 'Order must contain at least one item'}, status=400)
 
@@ -82,8 +78,11 @@ class OrderBuy(View):
             if discount_id and Discount.objects.filter(stripe_id=discount_id, active=True).exists():
                 discount_obj = Discount.objects.get(stripe_id=discount_id)
                 discounts.append({"coupon": discount_obj.stripe_id})
-
-                order_obj = Order.objects.create(discount=discount_obj)
+                if tax_id and Tax.objects.filter(stripe_id=discount_id, active=True).exists():
+                    tax_obj = Tax.objects.get(tax_rate_id=tax_id)
+                    order_obj = Order.objects.create(discount=discount_obj, tax=tax_obj)
+                else:
+                    order_obj = Order.objects.create(discount=discount_obj)
             else:
                 order_obj = Order.objects.create()
 
@@ -102,6 +101,7 @@ class OrderBuy(View):
                             'unit_amount': int(item_obj.price * 100),
                         },
                         'quantity': 1,
+                        'tax_rates': [tax_id] if tax_id else []
                     })
 
                 except Item.DoesNotExist:

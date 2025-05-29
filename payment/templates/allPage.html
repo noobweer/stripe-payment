@@ -113,13 +113,21 @@
     <h1>Все товары</h1>
 </div>
 
-<!-- Селект со скидками -->
+<!-- Селект со скидками, налогами -->
 <div class="checkout-section">
     <label for="discount-select">Выберите скидку:</label>
     <select id="discount-select">
         <option value="">Без скидки</option>
         {% for discount in discounts %}
             <option value="{{ discount.stripe_id }}">{{ discount.name }} ({{ discount.percent_off }}%)</option>
+        {% endfor %}
+    </select>
+
+    <label for="tax-select">Выберите налог:</label>
+    <select id="tax-select">
+        <option value="">Без налога</option>
+        {% for tax in taxes %}
+            <option value="{{ tax.tax_rate_id }}">{{ tax.type }} — {{ tax.region }} ({{ tax.rate }}%)</option>
         {% endfor %}
     </select>
 
@@ -194,7 +202,10 @@
         document.getElementById('checkout-button').addEventListener('click', function () {
             const selectedItems = JSON.parse(localStorage.getItem('selectedItems') || '[]');
             const discountSelect = document.getElementById('discount-select');
+            const taxSelect = document.getElementById('tax-select');
+
             const discountId = discountSelect ? discountSelect.value : null;
+            const taxId = taxSelect ? taxSelect.value : null;
 
             if (selectedItems.length === 0) {
                 alert("Выберите хотя бы один товар для оформления заказа.");
@@ -209,7 +220,8 @@
                 },
                 body: JSON.stringify({
                     order: selectedItems,
-                    discount_id: discountId
+                    discount_id: discountId,
+                    tax_id: taxId
                 })
             })
             .then(response => response.json())

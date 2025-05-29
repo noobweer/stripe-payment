@@ -66,15 +66,6 @@
     <p>{{ item.description }}</p>
     <p>Цена: ${{ item.price|floatformat:2 }}</p>
 
-    <label for="discount-select">Выберите скидку:</label>
-    <select id="discount-select">
-        <option value="">Без скидки</option>
-        {% for discount in discounts %}
-            <option value="{{ discount.id }}">{{ discount.name }} ({{ discount.percent_off }}%)</option>
-        {% endfor %}
-    </select>
-
-    <button id="buy-button">Купить сейчас</button>
     <button id="add-to-order-button">Добавить в заказ</button>
     <a href="/">
         <button>На главную</button>
@@ -84,7 +75,6 @@
     <script>
         const itemId = {{ item.id }};
         const addToOrderButton = document.getElementById('add-to-order-button');
-        const buyButton = document.getElementById('buy-button');
         const discountSelect = document.getElementById('discount-select');
 
         // Проверяем, есть ли товар в localStorage
@@ -116,37 +106,6 @@
                 addToOrderButton.classList.remove('delete');
                 alert("Товар убран из заказа");
             }
-        });
-
-        // Логика кнопки "Купить сейчас"
-        buyButton.addEventListener('click', function () {
-            const selectedDiscountId = discountSelect ? discountSelect.value : null;
-
-            let url = `/buy/${itemId}/`;
-            if (selectedDiscountId) {
-                url += `?discount_id=${selectedDiscountId}`;
-            }
-
-            fetch(url, {
-                method: 'GET',
-                headers: {
-                    'X-CSRFToken': '{{ csrf_token }}'
-                }
-            })
-            .then(response => response.json())
-            .then(data => {
-                if (data.session_id) {
-                    const stripe = Stripe('pk_test_...');
-                    return stripe.redirectToCheckout({ sessionId: data.session_id });
-                } else if (data.error) {
-                    alert(data.error);
-                }
-            })
-            .then(result => {
-                if (result && result.error) {
-                    alert(result.error.message);
-                }
-            });
         });
     </script>
 </body>

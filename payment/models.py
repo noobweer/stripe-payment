@@ -24,22 +24,30 @@ class Tax(models.Model):
         return f"TYPE: {self.type} RATE: {self.rate} REGION: {self.region} ACTIVE: {self.active}"
 
 
-
 class Order(models.Model):
     created_at = models.DateTimeField(auto_now_add=True)
     discount = models.ForeignKey(Discount, on_delete=models.CASCADE, null=True)
+    tax = models.ForeignKey(Tax, on_delete=models.CASCADE, null=True)
 
     def total_price(self):
         return sum(item.total_price() for item in self.order_items.all())
 
     def __str__(self):
-        return f"ORDER ID: {self.id}"
+        return f"ORDER ID: {self.id} DISCOUNT: [{self.discount}] TAX: {self.tax}"
 
 
 class Item(models.Model):
     name = models.CharField(max_length=50, unique=True)
     description = models.TextField()
     price = models.DecimalField(max_digits=12, decimal_places=2)
+    currency = models.CharField(
+        max_length=3,
+        default='usd',
+        choices=[
+            ('usd', 'USD'),
+            ('eur', 'EUR'),
+        ]
+    )
 
     def __str__(self):
         return f'ID: {self.id} PRICE: {self.price} ITEM: {self.name}'

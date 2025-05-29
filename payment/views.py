@@ -78,7 +78,7 @@ class OrderBuy(View):
             if discount_id and Discount.objects.filter(stripe_id=discount_id, active=True).exists():
                 discount_obj = Discount.objects.get(stripe_id=discount_id)
                 discounts.append({"coupon": discount_obj.stripe_id})
-                if tax_id and Tax.objects.filter(stripe_id=discount_id, active=True).exists():
+                if tax_id and Tax.objects.filter(tax_rate_id=tax_id, active=True).exists():
                     tax_obj = Tax.objects.get(tax_rate_id=tax_id)
                     order_obj = Order.objects.create(discount=discount_obj, tax=tax_obj)
                 else:
